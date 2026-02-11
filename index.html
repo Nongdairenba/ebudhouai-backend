@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EbudhouAI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+    background: #0f172a;
+    color: #e5e7eb;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+.container {
+    max-width: 600px;
+    margin: 40px auto;
+    padding: 20px;
+}
+h1 {
+    text-align: center;
+    color: #38bdf8;
+}
+input {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 16px;
+    margin-top: 20px;
+}
+button {
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 18px;
+    background: #22c55e;
+    color: #022c22;
+}
+.result {
+    margin-top: 25px;
+    background: #020617;
+    padding: 20px;
+    border-radius: 12px;
+}
+.label {
+    color: #38bdf8;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🚗 EbudhouAI</h1>
+
+    <input id="symptoms" placeholder="Describe vehicle problem...">
+    <button onclick="analyze()">Analyze Vehicle</button>
+
+    <div id="output" class="result" style="display:none;">
+        <p><span class="label">Diagnosis:</span> <span id="diagnosis"></span></p>
+        <p><span class="label">Confidence:</span> <span id="confidence"></span></p>
+        <p><span class="label">Reason:</span> <span id="reason"></span></p>
+        <p><span class="label">Next Action:</span> <span id="action"></span></p>
+        <hr>
+        <p><span class="label">OBD Source:</span> <span id="obdsource"></span></p>
+        <p><span class="label">Voltage:</span> <span id="voltage"></span> V</p>
+        <p><span class="label">RPM:</span> <span id="rpm"></span></p>
+        <p><span class="label">Temperature:</span> <span id="temp"></span> °C</p>
+    </div>
+</div>
+
+<script>
+function analyze() {
+    fetch("/analyze", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            symptoms: document.getElementById("symptoms").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("output").style.display = "block";
+        document.getElementById("diagnosis").innerText = data.diagnosis;
+        document.getElementById("confidence").innerText = data.confidence;
+        document.getElementById("reason").innerText = data.reason;
+        document.getElementById("action").innerText = data.next_action;
+        document.getElementById("obdsource").innerText = data.obd.source;
+        document.getElementById("voltage").innerText = data.obd.voltage;
+        document.getElementById("rpm").innerText = data.obd.rpm;
+        document.getElementById("temp").innerText = data.obd.temperature;
+    });
+}
+</script>
+</body>
+</html>
