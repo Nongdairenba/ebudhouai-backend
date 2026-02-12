@@ -33,7 +33,7 @@ def get_real_obd_data():
         return None
 
     try:
-        connection = obd.OBD()  # auto connect
+        connection = obd.OBD()
         if not connection.is_connected():
             return None
 
@@ -95,23 +95,60 @@ def analyze():
     next_action = "No action required"
     reason = "No abnormal data detected"
 
-    if "battery" in symptoms or (obd_data.get("voltage") and obd_data["voltage"] < 11.5):
+    # -----------------------------
+    # BATTERY LOGIC
+    # -----------------------------
+    if (
+        "battery" in symptoms
+        or "low voltage" in symptoms
+        or (obd_data.get("voltage") and obd_data["voltage"] < 11.5)
+    ):
         diagnosis = "Weak or Failing Battery"
         confidence = "92%"
-        next_action = "Check terminals or replace battery"
-        reason = "Low voltage or battery-related symptoms"
+        next_action = "Check battery terminals or replace battery"
+        reason = "Low voltage detected or battery-related symptoms"
 
-    elif "not starting" in symptoms or "click" in symptoms:
-        diagnosis = "Starter Motor Issue"
-        confidence = "86%"
-        next_action = "Check starter motor and ignition switch"
-        reason = "No-start condition with clicking sound"
+    # -----------------------------
+    # STARTER / NO START LOGIC
+    # -----------------------------
+    elif (
+        "not starting" in symptoms
+        or "starter" in symptoms
+        or "not working" in symptoms
+        or "engine not" in symptoms
+        or "click" in symptoms
+        or "crank" in symptoms
+    ):
+        diagnosis = "Starter Motor or Ignition Issue"
+        confidence = "88%"
+        next_action = "Inspect starter motor, ignition switch, and wiring"
+        reason = "No-start or starter-related symptoms detected"
 
-    elif "overheat" in symptoms or (obd_data.get("temperature") and obd_data["temperature"] > 105):
+    # -----------------------------
+    # OVERHEATING LOGIC
+    # -----------------------------
+    elif (
+        "overheat" in symptoms
+        or "too hot" in symptoms
+        or (obd_data.get("temperature") and obd_data["temperature"] > 105)
+    ):
         diagnosis = "Engine Overheating"
         confidence = "90%"
-        next_action = "Stop engine and check coolant"
+        next_action = "Stop engine immediately and check coolant system"
         reason = "High engine temperature detected"
+
+    # -----------------------------
+    # LOW RPM / STALLING
+    # -----------------------------
+    elif (
+        "stall" in symptoms
+        or "shut off" in symptoms
+        or (obd_data.get("rpm") and obd_data["rpm"] < 500)
+    ):
+        diagnosis = "Engine Stalling Issue"
+        confidence = "85%"
+        next_action = "Check fuel system and idle control"
+        reason = "Low RPM or stalling symptoms detected"
 
     return jsonify({
         "diagnosis": diagnosis,
