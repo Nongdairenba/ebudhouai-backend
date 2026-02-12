@@ -2,7 +2,10 @@ from flask import Flask, request, jsonify, render_template
 import socket
 import os
 
-app = Flask(__name__)
+# -----------------------------
+# FIXED: Tell Flask where templates are
+# -----------------------------
+app = Flask(__name__, template_folder="templates")
 
 # -----------------------------
 # OBD LIB CHECK
