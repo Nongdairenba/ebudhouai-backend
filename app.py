@@ -2,17 +2,50 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import socket
 import os
+import psycopg2
+import json
+from datetime import datetime
 
 # -----------------------------
 # CREATE FLASK APP
 # -----------------------------
 app = Flask(__name__, template_folder="templates")
-
-# Enable CORS (allow frontend + APK access)
 CORS(app)
 
-# Load SECRET_KEY from Render
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_fallback_key")
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+
+# -----------------------------
+# DATABASE CONNECTION
+# -----------------------------
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
+
+
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS diagnosis_history (
+            id SERIAL PRIMARY KEY,
+            symptoms TEXT,
+            diagnosis TEXT,
+            confidence TEXT,
+            reason TEXT,
+            next_action TEXT,
+            obd_data JSONB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# Initialize table on startup
+init_db()
 
 
 # -----------------------------
@@ -96,7 +129,7 @@ def home():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "EbudhouAI backend running"})
+    return jsonify({"status": "EbudhouAI backend running with PostgreSQL"})
 
 
 @app.route("/analyze", methods=["POST"])
@@ -154,6 +187,28 @@ def analyze():
         next_action = "Check fuel system and idle control"
         reason = "Low RPM or stalling symptoms detected"
 
+    # -----------------------------
+    # SAVE TO DATABASE
+    # -----------------------------
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO diagnosis_history
+        (symptoms, diagnosis, confidence, reason, next_action, obd_data, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s);
+    """, (
+        symptoms,
+        diagnosis,
+        confidence,
+        reason,
+        next_action,
+        json.dumps(obd_data),
+        datetime.utcnow()
+    ))
+    conn.commit()
+    cur.close()
+    conn.close()
+
     return jsonify({
         "diagnosis": diagnosis,
         "confidence": confidence,
@@ -161,6 +216,31 @@ def analyze():
         "next_action": next_action,
         "obd": obd_data
     })
+
+
+@app.route("/history")
+def history():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM diagnosis_history ORDER BY created_at DESC;")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    history_list = []
+    for row in rows:
+        history_list.append({
+            "id": row[0],
+            "symptoms": row[1],
+            "diagnosis": row[2],
+            "confidence": row[3],
+            "reason": row[4],
+            "next_action": row[5],
+            "obd": row[6],
+            "created_at": row[7]
+        })
+
+    return jsonify(history_list)
 
 
 # -----------------------------
