@@ -6,50 +6,54 @@ import psycopg2
 import json
 from datetime import datetime
 
-# -----------------------------
-# CREATE FLASK APP
-# -----------------------------
 app = Flask(__name__, template_folder="templates")
 CORS(app)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_fallback_key")
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 # -----------------------------
-# DATABASE CONNECTION
+# DATABASE FUNCTIONS (SAFE)
 # -----------------------------
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
 def init_db():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS diagnosis_history (
-            id SERIAL PRIMARY KEY,
-            symptoms TEXT,
-            diagnosis TEXT,
-            confidence TEXT,
-            reason TEXT,
-            next_action TEXT,
-            obd_data JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+    if not DATABASE_URL:
+        print("DATABASE_URL not found")
+        return
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS diagnosis_history (
+                id SERIAL PRIMARY KEY,
+                symptoms TEXT,
+                diagnosis TEXT,
+                confidence TEXT,
+                reason TEXT,
+                next_action TEXT,
+                obd_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Database initialized successfully")
+    except Exception as e:
+        print("Database init error:", e)
 
 
-# Initialize table on startup
+# Initialize database safely
 init_db()
 
 
 # -----------------------------
-# OBD LIB CHECK
+# OBD CHECK
 # -----------------------------
 try:
     import obd
@@ -58,9 +62,6 @@ except Exception:
     OBD_LIB_AVAILABLE = False
 
 
-# -----------------------------
-# NETWORK CHECK
-# -----------------------------
 def wifi_available():
     try:
         socket.create_connection(("8.8.8.8", 53), timeout=2)
@@ -69,9 +70,6 @@ def wifi_available():
         return False
 
 
-# -----------------------------
-# REAL OBD (BLUETOOTH)
-# -----------------------------
 def get_real_obd_data():
     if not OBD_LIB_AVAILABLE:
         return None
@@ -95,9 +93,6 @@ def get_real_obd_data():
         return None
 
 
-# -----------------------------
-# FINAL DATA SELECTOR
-# -----------------------------
 def get_obd_data():
     real = get_real_obd_data()
     if real:
@@ -119,9 +114,6 @@ def get_obd_data():
     }
 
 
-# -----------------------------
-# ROUTES
-# -----------------------------
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -136,7 +128,6 @@ def health():
 def analyze():
     data = request.get_json(force=True)
     symptoms = data.get("symptoms", "").lower()
-
     obd_data = get_obd_data()
 
     diagnosis = "System Normal"
@@ -144,70 +135,52 @@ def analyze():
     next_action = "No action required"
     reason = "No abnormal data detected"
 
-    if (
-        "battery" in symptoms
-        or "low voltage" in symptoms
-        or (obd_data.get("voltage") and obd_data["voltage"] < 11.5)
-    ):
+    if "battery" in symptoms or (obd_data.get("voltage") and obd_data["voltage"] < 11.5):
         diagnosis = "Weak or Failing Battery"
         confidence = "92%"
         next_action = "Check battery terminals or replace battery"
-        reason = "Low voltage detected or battery-related symptoms"
+        reason = "Low voltage detected"
 
-    elif (
-        "not starting" in symptoms
-        or "starter" in symptoms
-        or "not working" in symptoms
-        or "engine not" in symptoms
-        or "click" in symptoms
-        or "crank" in symptoms
-    ):
+    elif "not starting" in symptoms or "starter" in symptoms:
         diagnosis = "Starter Motor or Ignition Issue"
         confidence = "88%"
-        next_action = "Inspect starter motor, ignition switch, and wiring"
-        reason = "No-start or starter-related symptoms detected"
+        next_action = "Inspect starter motor"
+        reason = "No-start symptoms detected"
 
-    elif (
-        "overheat" in symptoms
-        or "too hot" in symptoms
-        or (obd_data.get("temperature") and obd_data["temperature"] > 105)
-    ):
+    elif "overheat" in symptoms or (obd_data.get("temperature") and obd_data["temperature"] > 105):
         diagnosis = "Engine Overheating"
         confidence = "90%"
-        next_action = "Stop engine immediately and check coolant system"
-        reason = "High engine temperature detected"
+        next_action = "Check coolant system"
+        reason = "High temperature detected"
 
-    elif (
-        "stall" in symptoms
-        or "shut off" in symptoms
-        or (obd_data.get("rpm") and obd_data["rpm"] < 500)
-    ):
+    elif "stall" in symptoms or (obd_data.get("rpm") and obd_data["rpm"] < 500):
         diagnosis = "Engine Stalling Issue"
         confidence = "85%"
-        next_action = "Check fuel system and idle control"
-        reason = "Low RPM or stalling symptoms detected"
+        next_action = "Check fuel system"
+        reason = "Low RPM detected"
 
-    # -----------------------------
-    # SAVE TO DATABASE
-    # -----------------------------
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO diagnosis_history
-        (symptoms, diagnosis, confidence, reason, next_action, obd_data, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s);
-    """, (
-        symptoms,
-        diagnosis,
-        confidence,
-        reason,
-        next_action,
-        json.dumps(obd_data),
-        datetime.utcnow()
-    ))
-    conn.commit()
-    cur.close()
-    conn.close()
+    # Save safely to DB
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO diagnosis_history
+            (symptoms, diagnosis, confidence, reason, next_action, obd_data, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
+        """, (
+            symptoms,
+            diagnosis,
+            confidence,
+            reason,
+            next_action,
+            json.dumps(obd_data),
+            datetime.utcnow()
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print("Database insert error:", e)
 
     return jsonify({
         "diagnosis": diagnosis,
@@ -220,32 +193,32 @@ def analyze():
 
 @app.route("/history")
 def history():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM diagnosis_history ORDER BY created_at DESC;")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM diagnosis_history ORDER BY created_at DESC;")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
 
-    history_list = []
-    for row in rows:
-        history_list.append({
-            "id": row[0],
-            "symptoms": row[1],
-            "diagnosis": row[2],
-            "confidence": row[3],
-            "reason": row[4],
-            "next_action": row[5],
-            "obd": row[6],
-            "created_at": row[7]
-        })
+        history_list = []
+        for row in rows:
+            history_list.append({
+                "id": row[0],
+                "symptoms": row[1],
+                "diagnosis": row[2],
+                "confidence": row[3],
+                "reason": row[4],
+                "next_action": row[5],
+                "obd": row[6],
+                "created_at": row[7]
+            })
 
-    return jsonify(history_list)
+        return jsonify(history_list)
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 
-# -----------------------------
-# LOCAL DEV ONLY
-# -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5090))
     app.run(host="0.0.0.0", port=port)
