@@ -1,13 +1,17 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 import socket
 import os
 
 # -----------------------------
-# CREATE FLASK APP (Production Ready)
+# CREATE FLASK APP
 # -----------------------------
 app = Flask(__name__, template_folder="templates")
 
-# Load SECRET_KEY from Render environment
+# Enable CORS (allow frontend + APK access)
+CORS(app)
+
+# Load SECRET_KEY from Render
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_fallback_key")
 
 
@@ -90,6 +94,11 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "EbudhouAI backend running"})
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json(force=True)
@@ -102,7 +111,6 @@ def analyze():
     next_action = "No action required"
     reason = "No abnormal data detected"
 
-    # Battery logic
     if (
         "battery" in symptoms
         or "low voltage" in symptoms
@@ -113,7 +121,6 @@ def analyze():
         next_action = "Check battery terminals or replace battery"
         reason = "Low voltage detected or battery-related symptoms"
 
-    # Starter logic
     elif (
         "not starting" in symptoms
         or "starter" in symptoms
@@ -127,7 +134,6 @@ def analyze():
         next_action = "Inspect starter motor, ignition switch, and wiring"
         reason = "No-start or starter-related symptoms detected"
 
-    # Overheating logic
     elif (
         "overheat" in symptoms
         or "too hot" in symptoms
@@ -138,7 +144,6 @@ def analyze():
         next_action = "Stop engine immediately and check coolant system"
         reason = "High engine temperature detected"
 
-    # Stalling logic
     elif (
         "stall" in symptoms
         or "shut off" in symptoms
