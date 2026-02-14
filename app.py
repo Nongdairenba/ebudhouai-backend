@@ -3,9 +3,13 @@ import socket
 import os
 
 # -----------------------------
-# FIXED: Tell Flask where templates are
+# CREATE FLASK APP (Production Ready)
 # -----------------------------
 app = Flask(__name__, template_folder="templates")
+
+# Load SECRET_KEY from Render environment
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_fallback_key")
+
 
 # -----------------------------
 # OBD LIB CHECK
@@ -36,7 +40,7 @@ def get_real_obd_data():
         return None
 
     try:
-        connection = obd.OBD()  # auto connect
+        connection = obd.OBD()
         if not connection.is_connected():
             return None
 
@@ -98,9 +102,7 @@ def analyze():
     next_action = "No action required"
     reason = "No abnormal data detected"
 
-    # -----------------------------
-    # BATTERY LOGIC
-    # -----------------------------
+    # Battery logic
     if (
         "battery" in symptoms
         or "low voltage" in symptoms
@@ -111,9 +113,7 @@ def analyze():
         next_action = "Check battery terminals or replace battery"
         reason = "Low voltage detected or battery-related symptoms"
 
-    # -----------------------------
-    # STARTER / NO START LOGIC
-    # -----------------------------
+    # Starter logic
     elif (
         "not starting" in symptoms
         or "starter" in symptoms
@@ -127,9 +127,7 @@ def analyze():
         next_action = "Inspect starter motor, ignition switch, and wiring"
         reason = "No-start or starter-related symptoms detected"
 
-    # -----------------------------
-    # OVERHEATING LOGIC
-    # -----------------------------
+    # Overheating logic
     elif (
         "overheat" in symptoms
         or "too hot" in symptoms
@@ -140,9 +138,7 @@ def analyze():
         next_action = "Stop engine immediately and check coolant system"
         reason = "High engine temperature detected"
 
-    # -----------------------------
-    # LOW RPM / STALLING
-    # -----------------------------
+    # Stalling logic
     elif (
         "stall" in symptoms
         or "shut off" in symptoms
