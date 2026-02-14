@@ -14,19 +14,19 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 # -----------------------------
-# DATABASE FUNCTIONS (SAFE)
+# DATABASE CONNECTION
 # -----------------------------
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
-
-
-def init_db():
     if not DATABASE_URL:
-        print("DATABASE_URL not found")
-        return
+        return None
+    return psycopg2.connect(DATABASE_URL)
 
+
+def ensure_table_exists():
     try:
         conn = get_db_connection()
+        if not conn:
+            return
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS diagnosis_history (
@@ -43,13 +43,8 @@ def init_db():
         conn.commit()
         cur.close()
         conn.close()
-        print("Database initialized successfully")
     except Exception as e:
-        print("Database init error:", e)
-
-
-# Initialize database safely
-init_db()
+        print("Table creation error:", e)
 
 
 # -----------------------------
@@ -126,6 +121,8 @@ def health():
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
+    ensure_table_exists()  # Create table safely when needed
+
     data = request.get_json(force=True)
     symptoms = data.get("symptoms", "").lower()
     obd_data = get_obd_data()
@@ -159,28 +156,29 @@ def analyze():
         next_action = "Check fuel system"
         reason = "Low RPM detected"
 
-    # Save safely to DB
+    # Save to DB safely
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO diagnosis_history
-            (symptoms, diagnosis, confidence, reason, next_action, obd_data, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s);
-        """, (
-            symptoms,
-            diagnosis,
-            confidence,
-            reason,
-            next_action,
-            json.dumps(obd_data),
-            datetime.utcnow()
-        ))
-        conn.commit()
-        cur.close()
-        conn.close()
+        if conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO diagnosis_history
+                (symptoms, diagnosis, confidence, reason, next_action, obd_data, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """, (
+                symptoms,
+                diagnosis,
+                confidence,
+                reason,
+                next_action,
+                json.dumps(obd_data),
+                datetime.utcnow()
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
     except Exception as e:
-        print("Database insert error:", e)
+        print("Insert error:", e)
 
     return jsonify({
         "diagnosis": diagnosis,
@@ -194,7 +192,11 @@ def analyze():
 @app.route("/history")
 def history():
     try:
+        ensure_table_exists()
         conn = get_db_connection()
+        if not conn:
+            return jsonify([])
+
         cur = conn.cursor()
         cur.execute("SELECT * FROM diagnosis_history ORDER BY created_at DESC;")
         rows = cur.fetchall()
@@ -215,6 +217,7 @@ def history():
             })
 
         return jsonify(history_list)
+
     except Exception as e:
         return jsonify({"error": str(e)})
 
