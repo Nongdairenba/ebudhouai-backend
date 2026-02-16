@@ -64,9 +64,9 @@ button {
         <p><span class="label">Next Action:</span> <span id="action"></span></p>
         <hr>
         <p><span class="label">OBD Source:</span> <span id="obdsource"></span></p>
-        <p><span class="label">Voltage:</span> <span id="voltage"></span> V</p>
+        <p><span class="label">Voltage:</span> <span id="voltage"></span></p>
         <p><span class="label">RPM:</span> <span id="rpm"></span></p>
-        <p><span class="label">Temperature:</span> <span id="temp"></span> °C</p>
+        <p><span class="label">Temperature:</span> <span id="temp"></span></p>
     </div>
 </div>
 
@@ -82,14 +82,18 @@ function analyze() {
     .then(res => res.json())
     .then(data => {
         document.getElementById("output").style.display = "block";
-        document.getElementById("diagnosis").innerText = data.diagnosis;
-        document.getElementById("confidence").innerText = data.confidence;
-        document.getElementById("reason").innerText = data.reason;
-        document.getElementById("action").innerText = data.next_action;
-        document.getElementById("obdsource").innerText = data.obd.source;
-        document.getElementById("voltage").innerText = data.obd.voltage;
-        document.getElementById("rpm").innerText = data.obd.rpm;
-        document.getElementById("temp").innerText = data.obd.temperature;
+        document.getElementById("diagnosis").innerText = data.diagnosis || "N/A";
+        document.getElementById("confidence").innerText = data.confidence || "N/A";
+        document.getElementById("reason").innerText = data.reason || "N/A";
+        document.getElementById("action").innerText = data.next_action || "N/A";
+        document.getElementById("obdsource").innerText = data.obd?.source || "N/A";
+        document.getElementById("voltage").innerText = data.obd?.voltage || "N/A";
+        document.getElementById("rpm").innerText = data.obd?.rpm || "N/A";
+        document.getElementById("temp").innerText = data.obd?.temperature || "N/A";
+    })
+    .catch(error => {
+        alert("Error connecting to server.");
+        console.error(error);
     });
 }
 </script>
