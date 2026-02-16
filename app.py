@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify, render_template
-import random
 
 app = Flask(__name__)
 
@@ -12,42 +11,47 @@ def analyze():
     try:
         data = request.get_json()
 
-        # Get user input safely
-        rpm = data.get("rpm", 0)
-        voltage = data.get("voltage", 0)
-        temperature = data.get("temperature", 0)
+        symptoms = data.get("symptoms", "").lower()
 
-        # Simple AI logic (you can improve later)
-        if voltage < 12:
-            diagnosis = "Battery voltage is low. Check battery or charging system."
-        elif temperature > 100:
+        # Simple AI logic
+        if "battery" in symptoms:
+            diagnosis = "Battery issue detected."
+            confidence = "85%"
+            reason = "Battery-related symptom identified."
+            next_action = "Check battery voltage and charging system."
+        elif "overheat" in symptoms or "heat" in symptoms:
             diagnosis = "Engine overheating detected."
-        elif rpm < 500:
-            diagnosis = "Engine RPM too low. Possible stalling issue."
+            confidence = "90%"
+            reason = "Overheating symptom identified."
+            next_action = "Inspect coolant level and radiator."
+        elif "noise" in symptoms:
+            diagnosis = "Abnormal engine noise detected."
+            confidence = "80%"
+            reason = "Noise-related symptom identified."
+            next_action = "Inspect engine belts and internal components."
         else:
-            diagnosis = "Vehicle parameters look normal."
+            diagnosis = "General vehicle inspection recommended."
+            confidence = "70%"
+            reason = "No specific issue keyword detected."
+            next_action = "Perform full diagnostic scan."
 
-        # OBD Data (FIXED with source field)
         obd_data = {
             "source": "Manual Input",
-            "rpm": rpm,
-            "voltage": voltage,
-            "temperature": temperature
+            "voltage": "N/A",
+            "rpm": "N/A",
+            "temperature": "N/A"
         }
 
-        response = {
-            "status": "success",
+        return jsonify({
             "diagnosis": diagnosis,
+            "confidence": confidence,
+            "reason": reason,
+            "next_action": next_action,
             "obd": obd_data
-        }
-
-        return jsonify(response)
+        })
 
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
